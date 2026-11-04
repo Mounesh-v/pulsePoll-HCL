@@ -7,7 +7,7 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:8080',
+        target: 'https://pulsepoll-api-60e5.onrender.com',
         changeOrigin: true,
       },
       '/ws': {

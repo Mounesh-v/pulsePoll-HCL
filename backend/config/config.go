@@ -36,7 +36,7 @@ func LoadConfig() *Config {
 		JWTSecret:     getEnv("JWT_SECRET", "nzY3O3Y0vlnxWYGIRxxBUQhrhc0PShz0"),
 		FrontendOrigin: getEnv(
 			"FRONTEND_ORIGIN",
-			"http://localhost:5173",
+			"https://pulse-poll-hcl.vercel.app",
 		),
 	}
 }
