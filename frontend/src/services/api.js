@@ -85,6 +85,11 @@ export const pollApi = {
     return response.data
   },
 
+  getVoteStatus: async (pollId) => {
+    const response = await api.get(`/api/polls/${pollId}/vote-status`)
+    return response.data
+  },
+
   getResults: async (pollId) => {
     const response = await api.get(`/api/polls/${pollId}/results`)
     return response.data

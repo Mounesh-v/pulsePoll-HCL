@@ -76,6 +76,7 @@ func RegisterPollRoutes(
 	// Public routes
 	router.GET("/api/polls/:id", pollHandler.GetPoll)
 	router.GET("/api/polls/:id/results", resultHandler.GetResults)
+	router.GET("/api/polls/:id/vote-status", voteHandler.GetVoteStatus)
 	router.POST("/api/polls/:id/vote", voteHandler.SubmitVote)
 
 	// WebSocket route

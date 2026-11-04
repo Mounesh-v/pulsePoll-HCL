@@ -104,43 +104,59 @@ function PollDetailsView({ pollId }) {
   useEffect(() => {
     let cancelled = false
 
-    pollApi
-      .get(pollId)
-      .then((pollResponse) => {
-        if (cancelled) {
-          return null
-        }
+    const fetchAll = async () => {
+      // Fetch poll details, results, and vote status in parallel.
+      // Vote-status is best-effort: a failure must not block the page.
+      const [pollResult, resultsResult, statusResult] =
+        await Promise.allSettled([
+          pollApi.get(pollId),
+          pollApi.getResults(pollId),
+          pollApi.getVoteStatus(pollId),
+        ])
 
-        setPoll(pollResponse.data)
+      if (cancelled) return
 
-        return pollApi
-          .getResults(pollId)
-          .then((resultsResponse) => {
-            if (!cancelled) {
-              setResults(resultsResponse.data)
-            }
-          })
-          .catch((resultsLoadError) => {
-            if (!cancelled) {
-              setResultsError(
-                getApiErrorMessage(
-                  resultsLoadError,
-                  'Could not load live results',
-                ),
-              )
-            }
-          })
-      })
-      .catch((loadError) => {
-        if (!cancelled) {
-          setError(getApiErrorMessage(loadError, 'Could not load this poll'))
+      if (pollResult.status === 'rejected') {
+        setError(
+          getApiErrorMessage(
+            pollResult.reason,
+            'Could not load this poll',
+          ),
+        )
+        setIsLoading(false)
+        return
+      }
+
+      setPoll(pollResult.value.data)
+
+      if (resultsResult.status === 'fulfilled') {
+        setResults(resultsResult.value.data)
+      } else {
+        setResultsError(
+          getApiErrorMessage(
+            resultsResult.reason,
+            'Could not load live results',
+          ),
+        )
+      }
+
+      if (statusResult.status === 'fulfilled') {
+        const { hasVoted: alreadyVoted, optionId: chosenOption } =
+          statusResult.value.data ?? {}
+
+        if (alreadyVoted) {
+          setHasVoted(true)
+          setVotedOptionId(chosenOption ?? '')
+          setSelectedOption(chosenOption ?? '')
         }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setIsLoading(false)
-        }
-      })
+      }
+      // If the status call failed we silently ignore it; the duplicate-key
+      // error from MongoDB still prevents a second vote.
+
+      setIsLoading(false)
+    }
+
+    fetchAll()
 
     return () => {
       cancelled = true
@@ -222,8 +238,21 @@ function PollDetailsView({ pollId }) {
       const status = voteFailure?.response?.status
 
       if (status === 409) {
+        // The backend rejected the vote as a duplicate.  Fetch the actual
+        // option that was originally cast so we can highlight it.
         setHasVoted(true)
         setVoteError('This browser has already voted in this poll.')
+
+        try {
+          const statusResponse = await pollApi.getVoteStatus(pollId)
+          const chosenOption = statusResponse?.data?.optionId
+          if (chosenOption) {
+            setVotedOptionId(chosenOption)
+            setSelectedOption(chosenOption)
+          }
+        } catch {
+          // Status look-up failed — keep the UI blocked but skip highlight.
+        }
       } else if (status === 403) {
         setPoll((current) =>
           current ? { ...current, status: 'closed' } : current,

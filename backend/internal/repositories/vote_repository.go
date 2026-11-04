@@ -87,3 +87,28 @@ func (r *VoteRepository) CountByPollAndOption(
 		},
 	)
 }
+
+// FindByPollAndVoter returns the vote cast by voterToken in the given poll,
+// or mongo.ErrNoDocuments if the voter has not voted yet.
+func (r *VoteRepository) FindByPollAndVoter(
+	ctx context.Context,
+	pollID bson.ObjectID,
+	voterToken string,
+) (*models.Vote, error) {
+
+	var vote models.Vote
+
+	err := r.collection.FindOne(
+		ctx,
+		bson.M{
+			"pollId":     pollID,
+			"voterToken": voterToken,
+		},
+	).Decode(&vote)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return &vote, nil
+}

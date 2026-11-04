@@ -76,7 +76,7 @@ func (h *VoteHandler) SubmitVote(c *gin.Context) {
 		}
 	}
 
-	// Store token in browser cookie
+	// Store token in browser cookie — path covers both /vote and /vote-status
 	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie(
 		"pulsepoll_voter",
@@ -142,5 +142,59 @@ func (h *VoteHandler) SubmitVote(c *gin.Context) {
 		"success": true,
 		"message": "Vote submitted successfully",
 		"data":    result,
+	})
+}
+
+// GET /api/polls/:id/vote-status
+// Returns whether the cookie-identified voter has already voted in this poll,
+// and which option they chose.  Always returns 200 so the frontend can read
+// the body — even when no cookie exists (hasVoted: false).
+func (h *VoteHandler) GetVoteStatus(c *gin.Context) {
+
+	pollID, err := bson.ObjectIDFromHex(c.Param("id"))
+
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"success": false,
+			"message": "Invalid poll ID",
+		})
+		return
+	}
+
+	// If no cookie exists the voter has never voted — return early.
+	voterToken, err := c.Cookie("pulsepoll_voter")
+	if err != nil || voterToken == "" {
+		c.JSON(http.StatusOK, gin.H{
+			"success": true,
+			"data": gin.H{
+				"hasVoted": false,
+				"optionId": "",
+			},
+		})
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(
+		c.Request.Context(),
+		5*time.Second,
+	)
+	defer cancel()
+
+	status, err := h.voteService.CheckVoteStatus(ctx, pollID, voterToken)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"success": false,
+			"message": "Could not check voting status",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"success": true,
+		"data": gin.H{
+			"hasVoted": status.HasVoted,
+			"optionId": status.OptionID,
+		},
 	})
 }

@@ -21,6 +21,12 @@ var (
 	ErrPollClosed    = errors.New("poll is closed or expired")
 )
 
+// VoteStatus describes whether a voter has already voted in a poll.
+type VoteStatus struct {
+	HasVoted bool   `json:"hasVoted"`
+	OptionID string `json:"optionId,omitempty"`
+}
+
 type VoteService struct {
 	pollRepo *repositories.PollRepository
 	voteRepo *repositories.VoteRepository
@@ -44,6 +50,34 @@ func NewVoteService(
 		voteRepo: voteRepo,
 		redis:    redisClient,
 	}
+}
+
+// CheckVoteStatus reports whether voterToken has already voted in pollID.
+// It never returns an error for a voter who has not voted — only for unexpected
+// storage failures.
+func (s *VoteService) CheckVoteStatus(
+	ctx context.Context,
+	pollID bson.ObjectID,
+	voterToken string,
+) (*VoteStatus, error) {
+
+	if voterToken == "" {
+		return &VoteStatus{HasVoted: false}, nil
+	}
+
+	vote, err := s.voteRepo.FindByPollAndVoter(ctx, pollID, voterToken)
+
+	if err != nil {
+		if errors.Is(err, mongo.ErrNoDocuments) {
+			return &VoteStatus{HasVoted: false}, nil
+		}
+		return nil, err
+	}
+
+	return &VoteStatus{
+		HasVoted: true,
+		OptionID: vote.OptionID,
+	}, nil
 }
 
 func (s *VoteService) SubmitVote(
