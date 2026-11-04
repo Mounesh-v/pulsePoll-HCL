@@ -12,6 +12,9 @@ import (
 	"pulsepoll/backend/internal/middleware"
 	"pulsepoll/backend/internal/realtime"
 	"pulsepoll/backend/internal/routes"
+	"time"
+
+	"github.com/gin-contrib/cors"
 )
 
 func main() {
@@ -56,6 +59,25 @@ func main() {
 
 	// Initialize Gin router
 	router := gin.Default()
+
+	router.Use(cors.New(cors.Config{
+		AllowOrigins: []string{
+			cfg.FrontendOrigin,
+		},
+		AllowMethods: []string{
+			"GET",
+			"POST",
+			"PATCH",
+			"OPTIONS",
+		},
+		AllowHeaders: []string{
+			"Origin",
+			"Content-Type",
+			"Authorization",
+		},
+		AllowCredentials: true,
+		MaxAge:           12 * time.Hour,
+	}))
 
 	// Register authentication routes
 	if err := routes.RegisterAuthRoutes(
