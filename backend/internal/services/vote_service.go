@@ -2,8 +2,10 @@ package services
 
 import (
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/redis/go-redis/v9"
@@ -80,11 +82,25 @@ func (s *VoteService) CheckVoteStatus(
 	}, nil
 }
 
+// hashIP returns a short, non-reversible fingerprint of a raw IP address.
+// Using SHA-256 means the real IP is never persisted in Redis or MongoDB.
+func hashIP(rawIP string) string {
+	sum := sha256.Sum256([]byte(rawIP))
+	return fmt.Sprintf("%x", sum[:16]) // 32-char hex — compact but collision-resistant enough
+}
+
+// ipVoteKey returns the Redis key used to track whether an IP has already
+// voted in a specific poll.  The key expires with the same TTL as poll results.
+func ipVoteKey(pollID bson.ObjectID, ipHash string) string {
+	return "vote:ip:" + pollID.Hex() + ":" + ipHash
+}
+
 func (s *VoteService) SubmitVote(
 	ctx context.Context,
 	pollID bson.ObjectID,
 	optionID string,
 	voterToken string,
+	clientIP string, // raw IP from the request; empty string disables IP check
 ) (*VoteResult, error) {
 
 	// 1. Find poll
@@ -120,11 +136,29 @@ func (s *VoteService) SubmitVote(
 		return nil, ErrInvalidOption
 	}
 
-	// 4. Save vote permanently in MongoDB
+	// 4a. IP-level deduplication via Redis (fast path, before hitting MongoDB).
+	//     We use SET NX (set-if-not-exists) so this is atomic.
+	var ipHash string
+	if clientIP != "" {
+		ipHash = hashIP(clientIP)
+		key := ipVoteKey(pollID, ipHash)
+
+		// Try to claim the slot for this IP.  TTL = 365 days keeps it in Redis
+		// for the lifetime of any reasonable poll.
+		set, redisErr := s.redis.SetNX(ctx, key, optionID, 365*24*time.Hour).Result()
+		if redisErr == nil && !set {
+			// Key already existed → this IP has voted before.
+			return nil, ErrAlreadyVoted
+		}
+		// If Redis is down we fall through — MongoDB unique-index is the safety net.
+	}
+
+	// 4b. Save vote permanently in MongoDB (also enforces unique(pollId, voterToken)).
 	vote := &models.Vote{
 		PollID:     pollID,
 		OptionID:   optionID,
 		VoterToken: voterToken,
+		IPHash:     ipHash,
 		CreatedAt:  time.Now().UTC(),
 	}
 
@@ -132,7 +166,15 @@ func (s *VoteService) SubmitVote(
 
 	if err != nil {
 		if mongo.IsDuplicateKeyError(err) {
+			// Token was already seen → roll back the IP slot if we just claimed it.
+			if ipHash != "" {
+				_ = s.redis.Del(ctx, ipVoteKey(pollID, ipHash)).Err()
+			}
 			return nil, ErrAlreadyVoted
+		}
+		// Unexpected error → release the IP slot so the voter can retry.
+		if ipHash != "" {
+			_ = s.redis.Del(ctx, ipVoteKey(pollID, ipHash)).Err()
 		}
 		return nil, err
 	}

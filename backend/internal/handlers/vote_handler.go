@@ -61,10 +61,17 @@ func (h *VoteHandler) SubmitVote(c *gin.Context) {
 		return
 	}
 
-	// Get existing voter token
+	// Resolve voter token: cookie > X-Voter-Token header > generate new one.
+	// The header is a client-side localStorage fallback for when cookies are
+	// cleared but the page still has the token stored in localStorage.
 	voterToken, err := c.Cookie("pulsepoll_voter")
 
 	if err != nil || voterToken == "" {
+		// Fall back to the header sent by the frontend localStorage backup.
+		voterToken = c.GetHeader("X-Voter-Token")
+	}
+
+	if voterToken == "" {
 		voterToken, err = generateVoterToken()
 
 		if err != nil {
@@ -76,17 +83,24 @@ func (h *VoteHandler) SubmitVote(c *gin.Context) {
 		}
 	}
 
-	// Store token in browser cookie — path covers both /vote and /vote-status
+	// Persist token in an HttpOnly cookie scoped to the entire API so the
+	// browser sends it on both /vote and /vote-status without JS access.
 	c.SetSameSite(http.SameSiteLaxMode)
 	c.SetCookie(
 		"pulsepoll_voter",
 		voterToken,
-		60*60*24*365,
-		"/api/polls",
+		60*60*24*365, // 1 year
+		"/",          // whole origin so the cookie is sent on every API call
 		"",
-		false, // Change to true in production with HTTPS
-		true,  // HttpOnly
+		false, // set to true once the deployment uses HTTPS end-to-end
+		true,  // HttpOnly — not readable by JS; reduces XSS risk
 	)
+
+	// Echo the token back so the frontend can persist it in localStorage.
+	c.Header("X-Voter-Token", voterToken)
+
+	// Extract the real client IP, respecting common reverse-proxy headers.
+	clientIP := c.ClientIP()
 
 	ctx, cancel := context.WithTimeout(
 		c.Request.Context(),
@@ -99,6 +113,7 @@ func (h *VoteHandler) SubmitVote(c *gin.Context) {
 		pollID,
 		req.OptionID,
 		voterToken,
+		clientIP,
 	)
 
 	if err != nil {

@@ -74,6 +74,10 @@ func main() {
 			"Origin",
 			"Content-Type",
 			"Authorization",
+			"X-Voter-Token", // localStorage-backed voter token fallback
+		},
+		ExposeHeaders: []string{
+			"X-Voter-Token", // so the frontend JS can read it from the response
 		},
 		AllowCredentials: true,
 		MaxAge:           12 * time.Hour,

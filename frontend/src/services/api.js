@@ -2,19 +2,26 @@ import axios from 'axios'
 
 export const AUTH_STORAGE_KEY = 'pulsepoll.auth'
 
+// Key used to persist the anonymous voter token in localStorage.
+// This is a secondary fallback: the HttpOnly cookie is the primary store.
+// If the user clears cookies but not localStorage, this lets us re-send the
+// same token so the backend can still recognise them as a previous voter.
+const VOTER_TOKEN_KEY = 'pulsepoll.voter'
+
 export const API_BASE_URL = (
   import.meta.env.VITE_API_URL || 'https://pulsepoll-api-60e5.onrender.com'
 ).replace(/\/$/, '')
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  withCredentials: true,
+  withCredentials: true, // send/receive cookies (HttpOnly voter cookie + auth)
   headers: {
     'Content-Type': 'application/json',
   },
 })
 
 api.interceptors.request.use((config) => {
+  // 1. Attach JWT auth token if present.
   const stored = localStorage.getItem(AUTH_STORAGE_KEY)
 
   if (stored) {
@@ -29,11 +36,28 @@ api.interceptors.request.use((config) => {
     }
   }
 
+  // 2. Attach the localStorage voter token as a fallback header.
+  //    The backend prefers the HttpOnly cookie; this header is only used
+  //    when the cookie is missing (e.g., user cleared cookies).
+  const voterToken = localStorage.getItem(VOTER_TOKEN_KEY)
+  if (voterToken) {
+    config.headers['X-Voter-Token'] = voterToken
+  }
+
   return config
 })
 
 api.interceptors.response.use(
-  (response) => response,
+  (response) => {
+    // If the server echoes back a voter token, persist it in localStorage so
+    // it survives cookie clears.
+    const echoedToken = response.headers?.['x-voter-token']
+    if (echoedToken) {
+      localStorage.setItem(VOTER_TOKEN_KEY, echoedToken)
+    }
+
+    return response
+  },
   (error) => {
     const status = error?.response?.status
     const stored = localStorage.getItem(AUTH_STORAGE_KEY)
