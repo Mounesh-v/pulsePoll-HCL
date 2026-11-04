@@ -1,0 +1,76 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Host Grotesk", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Marko One", "Lora", Georgia, serif;
+
+  --color-canvas: #a9c8db;
+  --color-surface: #f7fbfd;
+  --color-surface-soft: #c7dfe9;
+  --color-muted: #6f96a8;
+  --color-primary: #0866f5;
+  --color-cyan: #0799cc;
+  --color-ink: #101c2d;
+  --color-subtle: #536b7d;
+  --color-line: #d5e5ed;
+  --color-live: #16865d;
+
+  --shadow-soft: 0 28px 70px -36px rgba(16, 28, 45, 0.45);
+  --shadow-card: 0 1px 2px rgba(16, 28, 45, 0.04),
+    0 18px 40px -28px rgba(16, 28, 45, 0.3);
+}
+
+:root {
+  font-family: var(--font-sans);
+  color: var(--color-ink);
+  background: var(--color-canvas);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background: var(--color-canvas);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  letter-spacing: -0.025em;
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+::selection {
+  background: #0866f5;
+  color: #f7fbfd;
+}
+
+input[type="datetime-local"]::-webkit-calendar-picker-indicator {
+  cursor: pointer;
+  opacity: 0.55;
+}
