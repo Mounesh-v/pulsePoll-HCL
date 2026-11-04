@@ -1,7 +1,9 @@
+
 package database
 
 import (
 	"context"
+	"crypto/tls"
 	"fmt"
 	"time"
 
@@ -18,6 +20,9 @@ func ConnectRedis(
 		Addr:     addr,
 		Password: password,
 		DB:       dbNumber,
+		TLSConfig: &tls.Config{
+			MinVersion: tls.VersionTLS12,
+		},
 	})
 
 	ctx, cancel := context.WithTimeout(
