@@ -3,7 +3,7 @@ import axios from 'axios'
 export const AUTH_STORAGE_KEY = 'pulsepoll.auth'
 
 export const API_BASE_URL = (
-  import.meta.env.VITE_API_URL || ''
+  import.meta.env.VITE_API_URL || 'https://pulsepoll-api-60e5.onrender.com'
 ).replace(/\/$/, '')
 
 const api = axios.create({

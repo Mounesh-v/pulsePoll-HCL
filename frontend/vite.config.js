@@ -11,7 +11,7 @@ export default defineConfig({
         changeOrigin: true,
       },
       '/ws': {
-        target: 'ws://localhost:8080',
+        target: 'wss://pulsepoll-api-60e5.onrender.com',
         changeOrigin: true,
         ws: true,
       },
